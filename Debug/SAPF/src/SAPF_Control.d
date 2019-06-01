@@ -6,7 +6,6 @@ SAPF/src/SAPF_Control.obj: /home/jltm/Programas/CodeComposerStudio/ccsv8/tools/c
 SAPF/src/SAPF_Control.obj: /home/jltm/Programas/CodeComposerStudio/ccsv8/tools/compiler/ti-cgt-c2000_18.1.3.LTS/include/_ti_config.h
 SAPF/src/SAPF_Control.obj: /home/jltm/Programas/CodeComposerStudio/ccsv8/tools/compiler/ti-cgt-c2000_18.1.3.LTS/include/linkage.h
 SAPF/src/SAPF_Control.obj: /home/jltm/Programas/CodeComposerStudio/ccsv8/tools/compiler/ti-cgt-c2000_18.1.3.LTS/include/_defs.h
-SAPF/src/SAPF_Control.obj: /home/jltm/Programas/CodeComposerStudio/ccsv8/tools/compiler/ti-cgt-c2000_18.1.3.LTS/include/stdarg.h
 SAPF/src/SAPF_Control.obj: /home/jltm/ti/c2000/C2000Ware_1_00_05_00/device_support/f2833x/headers/include/DSP2833x_Device.h
 SAPF/src/SAPF_Control.obj: /home/jltm/ti/c2000/C2000Ware_1_00_05_00/device_support/f2833x/headers/include/DSP2833x_Adc.h
 SAPF/src/SAPF_Control.obj: /home/jltm/ti/c2000/C2000Ware_1_00_05_00/device_support/f2833x/headers/include/DSP2833x_DevEmu.h
@@ -33,7 +32,6 @@ SAPF/src/SAPF_Control.obj: /home/jltm/ti/c2000/C2000Ware_1_00_05_00/device_suppo
 /home/jltm/Programas/CodeComposerStudio/ccsv8/tools/compiler/ti-cgt-c2000_18.1.3.LTS/include/_ti_config.h: 
 /home/jltm/Programas/CodeComposerStudio/ccsv8/tools/compiler/ti-cgt-c2000_18.1.3.LTS/include/linkage.h: 
 /home/jltm/Programas/CodeComposerStudio/ccsv8/tools/compiler/ti-cgt-c2000_18.1.3.LTS/include/_defs.h: 
-/home/jltm/Programas/CodeComposerStudio/ccsv8/tools/compiler/ti-cgt-c2000_18.1.3.LTS/include/stdarg.h: 
 /home/jltm/ti/c2000/C2000Ware_1_00_05_00/device_support/f2833x/headers/include/DSP2833x_Device.h: 
 /home/jltm/ti/c2000/C2000Ware_1_00_05_00/device_support/f2833x/headers/include/DSP2833x_Adc.h: 
 /home/jltm/ti/c2000/C2000Ware_1_00_05_00/device_support/f2833x/headers/include/DSP2833x_DevEmu.h: 

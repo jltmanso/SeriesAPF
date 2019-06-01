@@ -27,7 +27,6 @@ main.obj: /home/jltm/ti/c2000/C2000Ware_1_00_05_00/device_support/f2833x/headers
 main.obj: ../SAPF/inc/SAPF_Control.h
 main.obj: /home/jltm/Programas/CodeComposerStudio/ccsv8/tools/compiler/ti-cgt-c2000_18.1.3.LTS/include/math.h
 main.obj: /home/jltm/Programas/CodeComposerStudio/ccsv8/tools/compiler/ti-cgt-c2000_18.1.3.LTS/include/_defs.h
-main.obj: /home/jltm/Programas/CodeComposerStudio/ccsv8/tools/compiler/ti-cgt-c2000_18.1.3.LTS/include/stdarg.h
 
 ../main.c: 
 /home/jltm/Programas/CodeComposerStudio/ccsv8/tools/compiler/ti-cgt-c2000_18.1.3.LTS/include/string.h: 
@@ -56,4 +55,3 @@ main.obj: /home/jltm/Programas/CodeComposerStudio/ccsv8/tools/compiler/ti-cgt-c2
 ../SAPF/inc/SAPF_Control.h: 
 /home/jltm/Programas/CodeComposerStudio/ccsv8/tools/compiler/ti-cgt-c2000_18.1.3.LTS/include/math.h: 
 /home/jltm/Programas/CodeComposerStudio/ccsv8/tools/compiler/ti-cgt-c2000_18.1.3.LTS/include/_defs.h: 
-/home/jltm/Programas/CodeComposerStudio/ccsv8/tools/compiler/ti-cgt-c2000_18.1.3.LTS/include/stdarg.h: 

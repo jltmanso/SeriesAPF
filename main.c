@@ -13,8 +13,11 @@
 
 volatile Uint16 timer0_flag = 0;
 volatile Uint16 xInt3_flag = 0;
-volatile Uint16 pre_charge_flag = 0;
+volatile Uint16 pre_charge_flag = 0;                //-> optional
 volatile unsigned char rx_data = 0;
+volatile int16 enable = 0;
+volatile Uint16 error = ALL_OK;                     //-> optional
+volatile Uint16 detectedError = ALL_OK;             //-> optional
 
 void main(void)
 {
@@ -26,10 +29,10 @@ void main(void)
     GpioDataRegs.GPBCLEAR.bit.GPIO49 = 1;
 
     memset((void*)DC_Voltage, 0, BUFFERSIZE);
-    memset((void*)GridVoltage, 0, BUFFERSIZE >> 0x01);
+    memset((void*)Grid_Voltage, 0, BUFFERSIZE >> 0x01);
 
-    SciaTx_SendMsg("Starting SAPF System\n");
-
+    ClearStructVariables();
+    Calculation_KI_Max();
     ADC1_WakeUpSignal();
 
     for(;;){
@@ -40,10 +43,10 @@ void main(void)
         if(xInt3_flag){
             xInt3_flag = 0;
             ADC1_SaveData();
-            SAPFControl();
         }
-        if(pre_charge_flag){
-            //PreChargeDC_Link();
+        //Check if there is no error and the enable triggered by the error is different of -1 (enable value to interrupt the PWM pulses)
+        if(error == ALL_OK && enable != -1){
+            SAPFControl();
         }
     }
 }

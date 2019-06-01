@@ -10,72 +10,59 @@
 #define SAPF_INC_SAPF_CONTROL_H_
 
 #include <math.h>
-#include <stdarg.h>
-
 #include "DSP2833x_Device.h"
 
 //###############################################
 //#             General Defines                 #
 //###############################################
 #define         PI                  3.1415926f
-#define         V_RMS               1700.0                       //Digital Systen RMS Voltage
+#define         V_RMS               962.0f                       //Digital Systen RMS Voltage
 #define         FREQ                50                           //Grid Frequency
 
 #define         FSW                 20000.0f                     //Switching Frequency
 #define         FS                  (2 * FSW)                    //Sampling Frequency is double of the PWM Frequency (Unipolar Modulation)
 #define         TS                  0.000025f                    //Sampling Period (Ts) = 1 / Fs
 
-#define         ROOT_2              1.414213562                 //sqrt(2)
-#define         V_PEAK              (ROOT_2 * V_RMS)            //sqrt(2) * V_RMS = V_PEAK
+#define         ROOT_2              1.414213562                  //sqrt(2)
+#define         V_PEAK              (ROOT_2 * V_RMS)             //sqrt(2) * V_RMS = V_PEAK
 
 //###############################################
 //#         Phase Locked Loop Defines           #
 //###############################################
-#define         KP_PI_PLL           0.41f                        //Phase Locked Loop Proporcional Gain
-#define         KI_PI_PLL           0.001f                       //Phase Locked Loop Integral Gain
-#define         K_AMP_PLL           0.0019f
+#define         KP_PI_PLL           0.09f                        //Phase Locked Loop Proporcional Gain
+#define         KI_PI_PLL           30.0f                        //Phase Locked Loop Integral Gain
+#define         KP_AMP_PLL          40.0f
 
 //###############################################
 //#    Passive Filter Compensation Defines      #
 //###############################################
-#define         LPF                 0.000625f                    //Passive Filter Inductor Value
-#define         RPF                 0.5f                         //Passive Filter Resistor Value
+#define         LPF                 0.000823f                    //Passive Filter Inductor Value
+#define         RPF                 0.253f                       //Passive Filter Resistor Value
 
 //###############################################
 //#         DC Link Regulation Defines          #
 //###############################################
-#define         V_REF               842.0f                       //DC Link Voltage Reference (30v) -> -279 read by the sensor
-#define         KP_PI_DC            0.3f                         //DC Link Proporcional Gain
-#define         KI_PI_DC            0.0001f                      //DC Link Integral Gain
-
-//###############################################
-//#      DeadTimes Compensation Defines         #
-//###############################################
-#define         DT                  0.000003                    //Deadtime (DT) = 3us = 0.000003s
-#define         VD                  (DT * V_REF * FSW)          //Voltage Deviation (DV) = DT * V_REF * FSW
-
+#define         V_REF               400.0f//750.0f               //DC Link Voltage Reference (30V)
+#define         KP_PI_DC            16.8f                        //DC Link Proporcional Gain
+#define         KI_PI_DC            40.0f                        //DC Link Integral Gain
 //###############################################
 //#   Sliding Average DC Link Voltage Defines   #
 //###############################################
 #define         BUFFERSIZE          800                         //Size of the buffer to calculate the average DC Link Voltage
-
-//###############################################
-//#       Damping Compensation Defines          #
-//###############################################
-#define         KD                  0.0000065                   //Damping Gain
+#define         HALF_BUFFERSIZE     (BUFFERSIZE >> 0x01)
 
 //###############################################
 //#       Pre-Charge Compensation Defines       #
 //###############################################
-#define         PRE_LOAD_REF         187.0                       //5V sinusoidal wave
-#define         PRE_LOAD_KP          0.0008
-#define         PRE_LOAD_KI          0.00000009
+#define         PRE_CHARGE_REF      213.0f                      //5V sinusoidal wave
+#define         PRE_CHARGE_KP       1.0f
+#define         PRE_CHARGE_KI       0.0f
 
 //###############################################
 //#       Voltage Compensation Defines          #
 //###############################################
-#define         V_COMP_KP           5.8f
-#define         V_COMP_KI           6550.0f
+#define         V_COMP_KP           1.95f//1.2f
+#define         V_COMP_KI           0.08f//200.0f//500000.0f
 
 //###############################################
 //#            DAC Offsets Defines              #
@@ -98,54 +85,97 @@
 //DC Link Sensor Gain:                  24.98
 //Filter Voltage Sensor Gain:           21.1
 //Passive Filter Current Sensor Gain:   20.7
-#define         RANGE               0.02f                        //4%
 #define         PWM_OFFSET          1875
 #define         PWM_MAX             1575
 #define         PWM_MIN             -1575
-//#define         VDC_VG_FATOR        0.183f                      //(4.58 / 24.98) -> slope of the line of both graphs
-//#define         VF_VG_FATOR         0.366f//0.218f              //(4.58 / 21)    -> slope of the line of both graphs
 
 //###############################################
 //#    Sensors Offsets Equations Defines        #
 //###############################################
-#define         VGRID_OFFSET         71
-#define         RESERV_OFFSET        71
-#define         ILOAD_OFFSET         74
-#define         VDC_OFFSET           -82
-#define         VF_OFFSET            124
-#define         ILF_OFFSET           -1
-#define         RESERV1_OFFSET        0
-#define         ENABLE_OFFSET        -2
+#define         VGRID_OFFSET        45//+32
+#define         RESERV_OFFSET       0
+#define         ILOAD_OFFSET        71
+#define         VDC_OFFSET          77
+#define         VF_OFFSET           47//82//47
+#define         ILF_OFFSET          -1
+#define         RESERV1_OFFSET      0
+#define         ENABLE_OFFSET       -5
 
+//###############################################
+//#    Sensors Conversion Voltage Defines       #
+//###############################################
+#define         VGRID_GAIN          4.58f
+#define         RESERV_GAIN         0
+#define         ILOAD_GAIN          45.67f
+#define         VDC_GAIN            25
+#define         VF_GAIN             42.4
+#define         ILF_GAIN            20.7f
+#define         RESERV1_GAIN        0
+#define         ENABLE_GAIN         0
+
+//###############################################
+//#    Sensors Conversion Voltage Defines       #
+//###############################################
+#define         VGRID_MAX           1500.0f         //Error at 30% up Vgrid Peak
+#define         ILOAD_MAX           228.35f         //Error at 5A
+#define         VDC_MAX             1530.0f         //Error at 50V
+#define         VF_MAX              1484.0f         //Error at 35V
+#define         ILF_MAX             165.6f          //Error at 7A
 //###############################################
 //#        Integral MAX Error Defines           #
 //###############################################
-#define         KI_LIMIT(X)      (X ? (PWM_MAX / (X * TS)) : 0.0)
+#define         KI_LIMIT(X)      (X ? (PWM_MAX / X) : 0.0)
 
 typedef struct
 {
-    int Vgrid;                                                  //ADC0: Grid Voltage
-    int Reserv;                                                 //ADC1: Reserved Variable space
-    int ILoad;                                                  //ADC2: Load Current
-    int Vdc;                                                    //ADC3: DC Link Voltage
-    int Vf;                                                     //ADC4: SAPF Voltage
-    int Ilf;                                                    //ADC5: Passive Filter Current
-    int Reserv1;                                                //ADC6: Reserved Variable space
-    int Enable;                                                 //ADC7: SAPF Enable
-}InputData;
+    int16 Vgrid;                                                  //ADC0: Grid Voltage
+    int16 Reserv;                                                 //ADC1: Reserved Variable space
+    int16 ILoad;                                                  //ADC2: Load Current
+    int16 Vdc;                                                    //ADC3: DC Link Voltage
+    int16 Vf;                                                     //ADC4: SAPF Voltage
+    int16 Ilf;                                                    //ADC5: Passive Filter Current
+    int16 Reserv1;                                                //ADC6: Reserved Variable space
+    int16 Enable;                                                 //ADC7: SAPF Enable
+}inputData_t;
+
+typedef struct
+{
+    Uint16 index;
+    Uint32 sum;
+    Uint16 pos;
+}sharedData_t;
+
+typedef struct
+{
+    float lim_min;
+    float lim_max;
+}KI_Limits_t;
 
 enum BufferType_t{
     EMPTY_BUFFER,                                               //MODE EMPTY: start to fill the empty buffer
     FULL_BUFFER                                                 //MODE FULL: start to update the oldest value with the newest
 };
 
+enum SensorError_t{
+    CH0_VGRID_OVERVOLTAGE,
+    CH1_NOT_USED,
+    CH2_ILOAD_OVERCURRENT,
+    CH3_VDC_OVERVOLTAGE,
+    CH4_VF_OVERVOLTAGE,
+    CH5_ILF_OVERCURRENT,
+    ALL_OK
+};
+
 //###############################################
 //#     Private Translation Unit Variables      #
 //###############################################
 static int16 DC_Voltage[BUFFERSIZE];
-static int16 GridVoltage[BUFFERSIZE >> 0x01];
+static int16 Grid_Voltage[BUFFERSIZE >> 0x01];
 
 extern volatile Uint16 pre_charge_flag;
+extern volatile int16 enable;
+extern volatile Uint16 error;
+extern volatile Uint16 detectedError;
 //###############################################
 //#             User Functions                  #
 //###############################################
@@ -153,34 +183,44 @@ void SAPFControl(void);
 void ADC1_StartConversionSignal(void);
 void ADC1_WakeUpSignal(void);
 void ADC1_SaveData(void);
-void PreChargeDC_Link(void);
 Uint16 isSAPF_Enabled(void);
-void ClearIntegralsErrors(void);
-
+void ClearStructVariables(void);
+void Calculation_KI_Max(void);
 //###############################################
 //#     Private Translation Unit Functions      #
 //###############################################
 static float PhaseLockedLoop(const int16* grid);
-static int16 PreChargeVoltage_Compensation(const int16* pre_load_ref, const int16* Vfilter);
+static float PreChargeVoltage_Compensation(const float* pre_load_ref, const int16* Vfilter);
 static float PassiveFilterVoltage(const int16* pf_current);
 static Uint16 VariableCheck(float* variable, int16 value);
-static unsigned int isBufferFull(unsigned int* index);
-static float DC_LinkAverageVoltage(int16* DC_Voltage, const int16* dc_voltage);
-static Uint32 getDC_LinkValues(int16* DC_Voltage, const int16* dc_voltage, enum BufferType_t mode);
-static Uint16 getFullDC_LinkValues(int16* DC_Voltage, const int16* dc_voltage);
-static Uint32 DC_LinkContiniousAverageVoltage(int16* DC_Voltage, const int16*dc_voltage, Uint32* sum);
+static void ClearIntegralsErrors(void);
+static int16 CheckProtections(void);
+//              AVERAGE VOLTAGE                 #
+static float AverageVoltage(sharedData_t* data, int16* buffer, const int16* value);
+static Uint32 getValues(sharedData_t* data, int16* buffer, const int16* value, enum BufferType_t mode);
+static Uint16 getFullValues(sharedData_t* data, int16* buffer, const int16* value);
+static Uint32 SlidingWindow(sharedData_t* data, int16* buffer, const int16* value, Uint32* sum);
+static Uint16 isBufferFull(Uint16* index);
+static Uint16 isHalfBufferFull(unsigned int* index);
 
+static float PeakAverageVoltage(sharedData_t* data, int16* buffer, const int16* value);
+static Uint16 peakVoltage(const int16* value);
+
+static float PreChargeRefCalculation(const int16* dc_voltage, const float* pll);
 static float VoltageCompensation(float* VcompRef, const int16* filter);
-static float DC_LinkCompensation(const float* dc_voltage, float* pll);
-static float CompensationVoltageCalc(const int16* grid, const float* pll, const float* pf, const float* reg);
+static float DC_LinkRegulation(const float* dc_voltage, const float* pll);
+static float CompensationVoltageCalc(const int16* grid, const float* pll, const float* pll_unitary, const float* pf, const float* reg, const float* pre_charge);
 static unsigned int MaxValue(const int16* vector);
 static unsigned getVpeak(const int16* signal);
-static float DC_LinkRegulation(Uint16 disturbance, const float* average);
 
 static unsigned int SoftStart(const int16* dc_voltage);
 
 static int16 assert_PWM(int16 pwm);
-static int16 setPWM(int16 pwm);
+static int16 setPWM(float Vcompensation);
+
+static Uint16 variableCheck(float variable, int16 value, float range);
+static Uint16 isPLL_Synced(float PLL_amp, Uint16 Vpeak);
+static void Protection(void);
 
 static void DAC_Update(int16 DAC_OUT_A, int16 DAC_OUT_B, int16 DAC_OUT_C, int16 DAC_OUT_D, int16 DAC_OUT_E, int16 DAC_OUT_F, int16 DAC_OUT_G, int16 DAC_OUT_H);
 

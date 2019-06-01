@@ -80,8 +80,8 @@ void ConfigSystem(void)
     InitPieVectTable();
 
     EALLOW; //This is needed to write to EALLOW protected registers
-    PieVectTable.TINT0 = &CpuTimer0Interrupt_isr;       //Interrup��o Timer0
-    PieVectTable.XINT3 = &ExternalInterrupt3_isr;       //Interrup��o Externa ADC1 (ADS8528)
+    PieVectTable.TINT0 = &CpuTimer0Interrupt_isr;       //Interrupcao Timer0
+    PieVectTable.XINT3 = &ExternalInterrupt3_isr;       //Interrupcao Externa ADC1 (ADS8528)
     PieVectTable.SCIRXINTA = &SciaRxFifoInterrupt_isr;   //SCIB RX Interrupt Handler
     PieVectTable.SCITXINTA = &SciaTxFifoInterrupt_isr;   //SCIB TX Interrupt Handler
     EDIS;   //This is needed to disable write to EALLOW protected registers
@@ -152,8 +152,10 @@ static void ConfigTimer0(void)
                                     //8F0D180   1s
                                     //47868C0   0.5s
                                     //5DC       10u
-                                    //EA6       25u
+                                    //EA6       25u (40 kHz)
                                     //0x208D    50Hz 360 pontos
+                                    //0x124F    32kHz
+                                    //0x1D4C    20kHz
 
     //Initialize pre-scale counter to divide by 1 (SYSCLKOUT):
     CpuTimer0Regs.TPR.all  = 0;
@@ -254,18 +256,18 @@ static void ConfigPWM_1(void)
     EPwm1Regs.CMPCTL.bit.LOADBMODE  = CC_CTR_ZERO;      // load on CTR = Zero
 
     // Set Actions
-    EPwm1Regs.AQCTLA.bit.CAU        = AQ_SET;           // set actions for EPWM1A
-    EPwm1Regs.AQCTLA.bit.CAD        = AQ_CLEAR;
-    EPwm1Regs.AQCTLB.bit.CBU        = AQ_CLEAR;
-    EPwm1Regs.AQCTLB.bit.CBD        = AQ_SET;
+    EPwm1Regs.AQCTLA.bit.CAU        = AQ_CLEAR;//AQ_SET;           // set actions for EPWM1A
+    EPwm1Regs.AQCTLA.bit.CAD        = AQ_SET;//AQ_CLEAR;
+    EPwm1Regs.AQCTLB.bit.CBU        = AQ_SET;//AQ_CLEAR;
+    EPwm1Regs.AQCTLB.bit.CBD        = AQ_CLEAR;//AQ_SET;
 
     EPwm1Regs.DBCTL.bit.OUT_MODE    = DB_FULL_ENABLE;   // enable Dead-band module
     EPwm1Regs.DBCTL.bit.POLSEL      = DB_ACTV_HIC;      // Active Hi complementary
     //EPwm1Regs.DBFED                 = 150;              // FED = 50 TBCLKs (1us)
     //EPwm1Regs.DBRED                 = 150;              // RED = 50 TBCLKs (1us)
 
-    //EPwm1Regs.CMPA.half.CMPA        = 1875;             //50% Duty Cycle
-    //EPwm1Regs.CMPB                  = 1875;
+//    EPwm1Regs.CMPA.half.CMPA        = 1875;             //50% Duty Cycle
+//    EPwm1Regs.CMPB                  = 1875;
 
     //######################################  PWM 2 ######################################
     //TBPRD = fDSP/(2xfPWMxCLKDIVxHSPCLKDIV)
@@ -298,8 +300,8 @@ static void ConfigPWM_1(void)
     //EPwm2Regs.DBFED                 = 150;              // FED = 50 TBCLKs
     //EPwm2Regs.DBRED                 = 150;              // RED = 50 TBCLKs
 
-    //EPwm2Regs.CMPA.half.CMPA        = 1875;             //50% Duty Cycle
-    //EPwm2Regs.CMPB                  = 1875;             //50% Duty Cycle
+//    EPwm2Regs.CMPA.half.CMPA        = 1875;             //50% Duty Cycle
+//    EPwm2Regs.CMPB                  = 1875;             //50% Duty Cycle
 
 //    //######################################  PWM 3 ######################################
 //

@@ -8,51 +8,73 @@
 
 #include "../inc/SAPF_Control.h"
 
-InputData ADC_Data;
+inputData_t ADC_Data;
+KI_Limits_t KI_Vdc, KI_PreCharge;
+sharedData_t Grid_Data, VDC_Data;
 
-float Vpll = 0.0;
-float integral_comp_voltage = 0.0;
+float Vpll_unitary = 0.0;                               //needed for generate a precharging reference
+float amplitude = 0.0;                                  //needed for check if the amplitude is syncrhonized
+Uint16 new_data = 0;                                    //flag to sinalize the new data from the ADC is availabe
+
+float integral_comp_voltage = 0.0;                      //needed to be cleared when the enable button is disable
+float integral_preLoad_voltage = 0.0;                   //needed to be cleared when the enable button is disable
+float integral_dc_voltage = 0.0;                        //needed to be cleared when the enable button is disable
+float KP_COMP = V_COMP_KP;
+float KI_COMP = V_COMP_KI;
+
 //###############################################
 //#             User Functions                  #
 //###############################################
 void SAPFControl(void)
 {
-    //Uint16 GridDisturbance = 0;
-    //float Vpeak = 0;
-
-    Vpll = V_RMS * PhaseLockedLoop(&ADC_Data.Vgrid);
-
-//    if(pre_charge_flag)
-//      return;
-//
-//    float Vpf = PassiveFilterVoltage(&ADC_Data.Ilf);
-//    float Avg_DC = DC_LinkAverageVoltage(DC_Voltage, &ADC_Data.Vdc);
-//
-//    if (Vpeak = getVpeak(&ADC_Data.Vgrid)) {
-//        GridDisturbance = !VariableCheck(&Vpeak, V_PEAK);
-//    }
-//
-//    float Vreg = DC_LinkRegulation(GridDisturbance, &Avg_DC);
-//    float Vref = CompensationVoltageCalc(&ADC_Data.Vgrid, &Vpll, &Vpf, &Vreg);
-//    float Vcomp = VoltageCompensation(&Vref, &ADC_Data.Vf);
-
-    //CLOSED-LOOP
-    //float Vref = (float)ADC_Data.Vgrid - Vpll;
-    float Vref = Vpll - (float)ADC_Data.Vgrid;
+    static Uint16 synced = 0;
+    float Vreg = 0.0;
+    float Vref = 0.0;
+    float Vpf = 0.0;
     float Vcomp = 0.0;
-    if(isSAPF_Enabled()){
-        Vcomp = VoltageCompensation(&Vref, &ADC_Data.Vf);
-    }else{
-        integral_comp_voltage = 0.0;
+    float VpreCharge = 0.0;
+    int16 Vpwm = 0;
+
+    if(!isSAPF_Enabled()){
+        ClearIntegralsErrors();
     }
 
-    Vcomp *= (float)PWM_OFFSET;
-    Vcomp /= (float)ADC_Data.Vdc;
-    int16 Vpwm = (int16)Vcomp;
+    //Only execute the control once the ADC data is update
+    //Can be improved a lot
+    if(!new_data){
+        return;
+    }else{
+        new_data = 0;
+    }
 
-    setPWM(Vpwm);
+    float Vpll = PhaseLockedLoop(&ADC_Data.Vgrid);
+    float Avg_DC = AverageVoltage(&VDC_Data, DC_Voltage, &ADC_Data.Vdc);
 
-    DAC_Update(ADC_Data.Vgrid, Vpll, Vref, ADC_Data.Vf, Vpwm, 0, 0, 0);
+//SYNCHRONIZATION METHOD -> Only executes in the early instants
+    if(!synced){
+        Uint16 Vpeak = peakVoltage(&ADC_Data.Vgrid);
+        //Uint16 Vpeak = PeakAverageVoltage(&Grid_Data, Grid_Voltage, &ADC_Data.Vgrid);
+        synced = isPLL_Synced(Vpeak, amplitude);
+        pre_charge_flag = synced;
+    }
+//PRE-CHARGE METHOD
+    if(pre_charge_flag && isSAPF_Enabled()){
+        VpreCharge = -(PRE_CHARGE_REF * Vpll_unitary);
+        Vref = VpreCharge;
+        Vcomp = PreChargeVoltage_Compensation(&Vref, &ADC_Data.Vf);
+        Vpwm = setPWM(Vcomp);
+        pre_charge_flag = SoftStart(&ADC_Data.Vdc);
+    }
+//STEADY-STATE
+    if(!pre_charge_flag && synced && isSAPF_Enabled()){
+        VpreCharge = PreChargeRefCalculation(&ADC_Data.Vdc, &Vpll_unitary);
+        //Vreg = DC_LinkRegulation(&Avg_DC, &Vpll_unitary);
+        Vpf = PassiveFilterVoltage(&ADC_Data.Ilf);
+        Vref = CompensationVoltageCalc(&ADC_Data.Vgrid, &Vpll, &Vpll_unitary, &Vpf, &Vreg, &VpreCharge);
+        Vcomp = VoltageCompensation(&Vref, &ADC_Data.Vf);
+        Vpwm = setPWM(Vcomp);
+    }
+    DAC_Update(ADC_Data.Vgrid, Vpll, Vref, ADC_Data.Vf, 0, 0, 0, 0);
 }
 
 void ADC1_WakeUpSignal(void)
@@ -78,6 +100,8 @@ void ADC1_SaveData(void)
     unsigned long entrada_A = 0;
     unsigned long entrada_B = 0;
 
+    static int i = 0;
+
     asm("      NOP");   asm("      NOP");   asm("      NOP");   asm("      NOP");   asm("      NOP");
     asm("      NOP");   asm("      NOP");   asm("      NOP");   asm("      NOP");   asm("      NOP");
     asm("      NOP");   asm("      NOP");   asm("      NOP");   asm("      NOP");   asm("      NOP");
@@ -99,6 +123,7 @@ void ADC1_SaveData(void)
     ADC_Data.Vgrid >>= 0x04;
     ADC_Data.Vgrid += VGRID_OFFSET;
     ADC_Data.Vgrid = -ADC_Data.Vgrid;
+    //ADC_Data_f.Vgrid = (float)ADC_Data.Vgrid / VGRID_GAIN;
 
     GpioDataRegs.GPBSET.bit.GPIO34 = 1;
     asm("      NOP");   asm("      NOP");   asm("      NOP");
@@ -119,7 +144,8 @@ void ADC1_SaveData(void)
     ADC_Data.Reserv |= (entrada_B & 0x00000003) << 14;
     ADC_Data.Reserv >>= 0x04;
     ADC_Data.Reserv += RESERV_OFFSET;
-    ADC_Data.Reserv =- ADC_Data.Reserv;
+    ADC_Data.Reserv = -ADC_Data.Reserv;
+    //ADC_Data_f.Reserv = (float)ADC_Data.Reserv / RESERV_GAIN;
 
     entrada_A = GpioDataRegs.GPADAT.all;
     entrada_B = GpioDataRegs.GPBDAT.all;
@@ -136,6 +162,8 @@ void ADC1_SaveData(void)
     ADC_Data.ILoad >>= 0x04;
     ADC_Data.ILoad += ILOAD_OFFSET;
     ADC_Data.ILoad = -ADC_Data.ILoad;
+    ADC_Data.ILoad >>= 0x02;                            //Load Current Sensor Turns (4 turns)
+    //ADC_Data_f.ILoad = (float)ADC_Data.ILoad / ILOAD_GAIN;
 
     entrada_A = GpioDataRegs.GPADAT.all;
     entrada_B = GpioDataRegs.GPBDAT.all;
@@ -152,6 +180,7 @@ void ADC1_SaveData(void)
     ADC_Data.Vdc >>= 0x04;
     ADC_Data.Vdc += VDC_OFFSET;
     ADC_Data.Vdc = -ADC_Data.Vdc;
+    //ADC_Data_f.Vdc = (float)ADC_Data.Vdc / VDC_GAIN;
 
     entrada_A = GpioDataRegs.GPADAT.all;
     entrada_B = GpioDataRegs.GPBDAT.all;
@@ -168,7 +197,7 @@ void ADC1_SaveData(void)
     ADC_Data.Vf >>= 0x04;
     ADC_Data.Vf += VF_OFFSET;
     ADC_Data.Vf = -ADC_Data.Vf;
-    ADC_Data.Vf >>= 0x02;
+    //ADC_Data_f.Vf = (float)ADC_Data.Vf / VF_GAIN;
 
     entrada_A = GpioDataRegs.GPADAT.all;
     entrada_B = GpioDataRegs.GPBDAT.all;
@@ -185,6 +214,8 @@ void ADC1_SaveData(void)
     ADC_Data.Ilf >>= 0x04;
     ADC_Data.Ilf += ILF_OFFSET;
     ADC_Data.Ilf = -ADC_Data.Ilf;
+    ADC_Data.Ilf >>= 0x02;                            //Passive Filter Current Sensor Turns (4 turns)
+    //ADC_Data_f.Ilf = (float)ADC_Data.Ilf / ILF_GAIN;
 
     entrada_A = GpioDataRegs.GPADAT.all;
     entrada_B = GpioDataRegs.GPBDAT.all;
@@ -201,6 +232,7 @@ void ADC1_SaveData(void)
     ADC_Data.Reserv1 >>= 0x04;
     ADC_Data.Reserv1 += RESERV1_OFFSET;
     ADC_Data.Reserv1 = -ADC_Data.Reserv1;
+    //ADC_Data_f.Reserv1 = (float)ADC_Data.Reserv1 / RESERV1_GAIN;
 
     entrada_A = GpioDataRegs.GPADAT.all;
     entrada_B = GpioDataRegs.GPBDAT.all;
@@ -213,31 +245,27 @@ void ADC1_SaveData(void)
     ADC_Data.Enable |=(entrada_B & 0x00000003) >> 14;
     ADC_Data.Enable >>= 0x04;
     ADC_Data.Enable += ENABLE_OFFSET;
+    //ADC_Data_f.Enable = (float)ADC_DAta.Enable * ENABLE_GAIN;
+
+    //Check Protections
+    if((error = CheckProtections()) != ALL_OK){
+        Protection();
+        detectedError = error;
+        enable = -1;
+    }
+    new_data = 1;
 }
 
-void PreChargeDC_Link(void)
+int16 setPWM(float Vcompensation)
 {
-    int16 PreChargeRef = PRE_LOAD_REF * (Vpll / V_RMS);
+    Vcompensation *= (float)PWM_OFFSET;
+    Vcompensation /= (float)ADC_Data.Vdc;
 
-    float VcompPreCharge = PreChargeVoltage_Compensation(&PreChargeRef, &ADC_Data.Vf);
+    int16 Vpwm = (int16)Vcompensation;
+    int16 PWM = assert_PWM(Vpwm);
 
-    //float VpwmPreCharge *= VG_VDC_FATOR;
-    //VpwmPreCharge *= (float)PWM_OFFSET;
-    //VpwmPreCharge /= (float)ADC_Data.Vdc;
-    //int16 pwm = (int16)VpwmPreCharge;
-
-    //setPWM(pwm);
-
-    DAC_Update(ADC_Data.Vgrid, Vpll, ADC_Data.Vdc, PreChargeRef, ADC_Data.Vf, 0, 0, 0);
-
-    pre_charge_flag = SoftStart(&ADC_Data.Vdc);
-}
-
-int16 setPWM(int16 pwm)
-{
-    int16 PWM = assert_PWM(pwm);
-
-    EPwm1Regs.CMPA.half.CMPA = -PWM + PWM_OFFSET;   //S1 and S2
+    EPwm1Regs.CMPA.half.CMPA = PWM + PWM_OFFSET;   //S1 and S2
+    //EPwm2Regs.CMPA.half.CMPA = PWM + PWM_OFFSET;    //S3 and S4
     EPwm2Regs.CMPA.half.CMPA = PWM + PWM_OFFSET;    //S3 and S4
 
     return PWM;
@@ -254,7 +282,382 @@ int16 assert_PWM(int16 pwm)
     return pwm;
 }
 
-void DAC_Update(int16 DAC_OUT_A, int16 DAC_OUT_B, int16 DAC_OUT_C, int16 DAC_OUT_D, int16 DAC_OUT_E, int16 DAC_OUT_F, int16 DAC_OUT_G, int16 DAC_OUT_H)
+Uint16 isSAPF_Enabled(void)
+{
+    return (ADC_Data.Enable < 0);
+}
+
+void ClearStructVariables(void)
+{
+    ADC_Data.Vgrid = 0;
+    ADC_Data.Vf = 0;
+    ADC_Data.Enable = 0;
+    ADC_Data.ILoad = 0;
+    ADC_Data.Ilf = 0;
+    ADC_Data.Reserv = 0;
+    ADC_Data.Reserv1 = 0;
+    ADC_Data.Vdc = 0;
+
+    Grid_Data.index = 0;
+    Grid_Data.sum = 0;
+    Grid_Data.pos = 0;
+
+    VDC_Data.index = 0;
+    VDC_Data.sum = 0;
+    VDC_Data.pos = 0;
+
+    KI_Vdc.lim_min = 0.0;
+    KI_Vdc.lim_max = 0.0;
+
+    KI_PreCharge.lim_min = 0.0;
+    KI_PreCharge.lim_max = 0.0;
+}
+
+void Calculation_KI_Max(void)
+{
+    KI_Vdc.lim_max = KI_LIMIT(KI_PI_DC);
+    KI_Vdc.lim_min = -KI_Vdc.lim_max;
+
+    KI_PreCharge.lim_max = KI_LIMIT(PRE_CHARGE_KI);
+    KI_PreCharge.lim_min = -KI_PreCharge.lim_max;
+}
+//###############################################
+//#     Private Translation Unit Functions      #
+//###############################################
+static float PhaseLockedLoop(const int16* grid)
+{
+    float w = 0.0, error_pll = 0.0, error_amp = 0.0, error_phase = 0.0;
+
+    //static float amplitude = 0;
+    static float wt = 0;
+    static float integral_phase = 0;
+    static float integral_amp = 0;
+
+//    float K_AMP_LIM_MAX = KI_LIMIT(KP_AMP_PLL);
+//    float K_AMP_LIM_MIN = -K_AMP_LIM_MAX;
+    float KI_PHASE_LIM_MAX = KI_LIMIT(KI_PI_PLL);
+    float KI_PHASE_LIM_MIN = -KI_PHASE_LIM_MAX;
+
+    error_pll = *grid - (amplitude * sin(wt));
+
+    error_phase = error_pll * cos(wt);
+    error_amp = error_pll * sin(wt);
+
+    integral_phase += error_phase;
+
+    if (integral_phase > KI_PHASE_LIM_MAX) {
+        integral_phase = KI_PHASE_LIM_MAX;
+    }
+    if (integral_phase < KI_PHASE_LIM_MIN) {
+         integral_phase = KI_PHASE_LIM_MIN;
+    }
+
+    integral_amp += error_amp;
+
+//    if (integral_amp > K_AMP_LIM_MAX) {
+//        integral_amp = K_AMP_LIM_MAX;
+//    }
+//    if (integral_amp < K_AMP_LIM_MIN) {
+//        integral_amp = K_AMP_LIM_MIN;
+//    }
+
+    amplitude = integral_amp * KP_AMP_PLL * TS;
+
+    w = KP_PI_PLL * error_phase + KI_PI_PLL * integral_phase * TS + 2 * PI * FREQ;
+
+    wt += w * TS;
+
+    if(wt > 2 * PI)
+        wt = 0.0;
+
+    Vpll_unitary = sin(wt);
+
+    return (amplitude * Vpll_unitary);
+}
+
+static float PreChargeVoltage_Compensation(const float* pre_load_ref, const int16* Vfilter)
+{
+    float preLoad_voltage_comp = 0.0, preLoad_voltage_error = 0.0;
+    //static float integral_preLoad_voltage = 0.0;
+
+    float KI_PRE_CHARGE_MAX = KI_LIMIT(PRE_CHARGE_KI);
+    float KI_PRE_CHARGE_MIN = -KI_PRE_CHARGE_MAX;
+
+    preLoad_voltage_error = (*pre_load_ref) - (*Vfilter);
+    integral_preLoad_voltage += preLoad_voltage_error;
+
+    if(integral_preLoad_voltage > KI_PRE_CHARGE_MAX) {
+        integral_preLoad_voltage = KI_PRE_CHARGE_MAX;
+    }
+    if(integral_preLoad_voltage < KI_PRE_CHARGE_MIN) {
+        integral_preLoad_voltage = KI_PRE_CHARGE_MIN;
+    }
+
+    preLoad_voltage_comp = PRE_CHARGE_KP * preLoad_voltage_error + PRE_CHARGE_KI * integral_preLoad_voltage;
+
+    return preLoad_voltage_comp;
+}
+
+static float PassiveFilterVoltage(const int16* pf_current)
+{
+    float inductor_voltage = 0.0;
+    float resistance_voltage = 0.0;
+    float derivate = 0.0;
+    static float inductor_current_prev = 0.0;
+
+    derivate = ((*pf_current) - inductor_current_prev) / TS;
+    inductor_voltage = LPF * derivate;
+    inductor_current_prev = (*pf_current);
+
+    resistance_voltage = RPF * (*pf_current);
+
+    return (inductor_voltage + resistance_voltage);
+}
+
+static float AverageVoltage(sharedData_t* data, int16* buffer, const int16* value)
+{
+    //static Uint16 index = 0;
+    float average = 0.0;
+
+    if(!isBufferFull(&data->index)){
+        average = (float)getValues(data, buffer, value, EMPTY_BUFFER) / (float)BUFFERSIZE;
+        //data->index++;
+    }
+    else
+        average = (float)getValues(data, buffer, value, FULL_BUFFER) / (float)BUFFERSIZE;
+
+    return average;
+}
+
+static Uint32 getValues(sharedData_t* data, int16* buffer, const int16* value, enum BufferType_t mode)
+{
+    //static Uint32 sum = 0.0;
+
+    switch (mode)
+    {
+        case EMPTY_BUFFER:
+            data->sum += getFullValues(data, buffer, value);
+        break;
+        case FULL_BUFFER:
+            data->sum = SlidingWindow(data, buffer, value, &data->sum);
+        break;
+        default:
+        break;
+    }
+        return data->sum;
+}
+
+static Uint16 getFullValues(sharedData_t* data, int16* buffer, const int16* value)
+{
+    //static unsigned int index = 0;
+
+    buffer[data->index++] = (*value);
+
+    return (*value);
+}
+
+static Uint32 SlidingWindow(sharedData_t* data, int16* buffer, const int16* value, Uint32* sum)
+{
+    //static unsigned int pos = 0;
+
+    //*sum = (*sum) - (buffer[pos]) + (*value);
+    data->sum = data->sum - buffer[data->pos] + (*value);
+
+    buffer[data->pos++] = (*value);
+
+    if(isBufferFull(&data->pos)){
+        data->pos = 0;
+    }
+
+    return (data->sum);
+}
+
+static Uint16 isBufferFull(Uint16* index)
+{
+    return (*index == BUFFERSIZE - 1);
+}
+
+static Uint16 isHalfBufferFull(unsigned int* index)
+{
+    return (*index++ == HALF_BUFFERSIZE - 1);
+}
+
+//static float PeakAverageVoltage(sharedData_t* data, int16* buffer, const int16* value)
+//{
+//    static int16 Vpeak = 0;
+//    static Uint16 index = 0;
+//
+//    int16 abs_value = abs(*value);
+//
+//    // Check for the highest value of the semicicle of the waveform
+//    if(!isHalfBufferFull(&index)){
+//        if(abs_value > Vpeak)
+//            Vpeak = abs_value;
+//    }else {
+//        index = 0;
+//    }
+//    //  Return the average value of the peak waveform
+//    return AverageVoltage(data, buffer, &Vpeak);
+//}
+
+static Uint16 peakVoltage(const int16* value)
+{
+    static Uint16 Vpeak = 0;
+
+    int16 abs_value = abs(*value);
+
+    // Check for the highest value of the semicicle of the waveform
+    if(abs_value > Vpeak){
+        Vpeak = abs_value;
+    }
+
+    return Vpeak;
+}
+
+static float PreChargeRefCalculation(const int16* dc_voltage, const float* pll)
+{
+    float pre_charge_ref_error = 0.0;
+    float pre_charge_ref_comp = 0.0;
+
+    pre_charge_ref_error = V_REF - (*dc_voltage);
+
+    if(pre_charge_ref_error > PRE_CHARGE_REF){
+        pre_charge_ref_error = PRE_CHARGE_REF;
+    }
+    if(pre_charge_ref_error < (-PRE_CHARGE_REF)){
+        pre_charge_ref_error = (-PRE_CHARGE_REF);
+    }
+
+    pre_charge_ref_comp = pre_charge_ref_error;
+    pre_charge_ref_comp *= -(*pll);
+
+    return pre_charge_ref_comp;
+}
+
+static float DC_LinkRegulation(const float* dc_voltage, const float* pll)
+{
+    float dc_voltage_comp = 0.0;
+    float dc_voltage_error = 0.0;
+    //static float integral_dc_voltage = 0.0;
+
+    float KI_DC_LIM_MAX = KI_LIMIT(KI_PI_DC);
+    float KI_DC_LIM_MIN = -KI_DC_LIM_MAX;
+
+    dc_voltage_error = V_REF - (*dc_voltage);
+    integral_dc_voltage += dc_voltage_error;
+
+    //Check if the limits of the integral of the error are accomplished
+    if (integral_dc_voltage > KI_DC_LIM_MAX) {
+        integral_dc_voltage = KI_DC_LIM_MAX;
+    }
+    if (integral_dc_voltage < KI_DC_LIM_MIN) {
+        integral_dc_voltage = KI_DC_LIM_MIN;
+    }
+
+    dc_voltage_comp = KP_PI_DC * dc_voltage_error + KI_PI_DC * TS * integral_dc_voltage;
+
+    dc_voltage_comp *= -(*pll);
+
+    return dc_voltage_comp;
+}
+
+static float CompensationVoltageCalc(const int16* grid, const float* pll, const float* pll_unitary, const float* pf, const float* reg, const float * pre_charge)
+{
+//    float true_sinewave = V_PEAK * (*pll_unitary);
+//    float balance = true_sinewave - (*pll);
+
+    //float Vharm = (*pll) - (float)(*grid);
+
+    float Vref = (PRE_CHARGE_REF * Vpll_unitary);
+
+
+    return Vref;
+    //return (Vharm + (*reg) + balance + (*pre_charge));
+    //return (Vharm + (*pf) + (*reg) + balance + (*pre_charge));
+}
+
+static float VoltageCompensation(float* VcompRef, const int16* filter)
+{
+    float KI_VCOMP_LIM_MAX = KI_LIMIT(V_COMP_KI);
+    float KI_VCOMP_LIM_MIN = -KI_VCOMP_LIM_MAX;
+
+    float voltage_comp = 0.0, voltage_comp_error = 0.0;
+    //static float integral_comp_voltage = 0.0;
+
+    voltage_comp_error = (*VcompRef) - (*filter);
+    integral_comp_voltage += voltage_comp_error;
+
+    if (integral_comp_voltage > KI_VCOMP_LIM_MAX) {
+        integral_comp_voltage = KI_VCOMP_LIM_MAX;
+    }
+    if (integral_comp_voltage < KI_VCOMP_LIM_MIN) {
+        integral_comp_voltage = KI_VCOMP_LIM_MIN;
+    }
+
+    voltage_comp = KP_COMP * voltage_comp_error + KI_COMP * integral_comp_voltage;
+    //voltage_comp = KP * voltage_comp_error + KI * TS * integral_comp_voltage;
+    //voltage_comp = V_COMP_KP * voltage_comp_error + V_COMP_KI * TS * integral_comp_voltage;
+
+    return voltage_comp;
+}
+
+static unsigned int SoftStart(const int16* dc_link_voltage)
+{
+    return (*dc_link_voltage < V_REF);
+}
+
+static Uint16 variableCheck(float variable, int16 value, float range)
+{
+    return ((variable * (1 - range)) < value && (variable * (1 + range)) > value);
+}
+
+static Uint16 isPLL_Synced(float PLL_amp, Uint16 Vpeak)
+{
+    return variableCheck(PLL_amp, Vpeak, 0.02);
+}
+
+static int16 CheckProtections(void)
+{
+    if(ADC_Data.Vgrid > VGRID_MAX){
+        return CH0_VGRID_OVERVOLTAGE;
+    }
+
+//    if(ADC_Data.ILoad > ILOAD_MAX){
+//        return CH2_ILOAD_OVERCURRENT;
+//    }
+
+    if(ADC_Data.Vdc > VDC_MAX){
+        return CH3_VDC_OVERVOLTAGE;
+    }
+
+    if(ADC_Data.Vf > VF_MAX){
+        return CH4_VF_OVERVOLTAGE;
+    }
+
+//    if(ADC_Data.Ilf > ILF_MAX){
+//        return CH5_ILF_OVERCURRENT;
+//    }
+
+    return ALL_OK;
+}
+
+static void Protection(void)
+{
+    EPwm1Regs.AQCSFRC.bit.CSFA = 1; //Ativa EPWM1A -> S1
+    //EPwm1Regs.AQCSFRC.bit.CSFB = 0; //Desativa EPWM1B -> S2
+
+    EPwm2Regs.AQCSFRC.bit.CSFA = 1; //Ativa EPWM2A -> S3
+    //EPwm2Regs.AQCSFRC.bit.CSFB = 0; //Desativa EPWM2B -> S4
+}
+
+static void ClearIntegralsErrors(void)
+{
+    integral_comp_voltage = 0.0;
+    integral_preLoad_voltage = 0.0;
+    integral_dc_voltage = 0.0;
+}
+
+static void DAC_Update(int16 DAC_OUT_A, int16 DAC_OUT_B, int16 DAC_OUT_C, int16 DAC_OUT_D, int16 DAC_OUT_E, int16 DAC_OUT_F, int16 DAC_OUT_G, int16 DAC_OUT_H)
 {
     if(DAC_OUT_A > 2000)  DAC_OUT_A = 2000;
     if(DAC_OUT_A < -2000) DAC_OUT_A = -2000;
@@ -291,236 +694,3 @@ void DAC_Update(int16 DAC_OUT_A, int16 DAC_OUT_B, int16 DAC_OUT_C, int16 DAC_OUT
         SpiaRegs.SPITXBUF = 0x7000 + DAC_OUT_H + DAC_OUT_H_OFFSET;//2048 + 10;
     }
 }
-
-Uint16 isSAPF_Enabled(void)
-{
-    return (!ADC_Data.Enable);
-}
-
-void ClearIntegralsErrors(void)
-{
-    integral_comp_voltage = 0.0;
-}
-
-//###############################################
-//#     Private Translation Unit Functions      #
-//###############################################
-static float PhaseLockedLoop(const int16* grid)
-{
-    float w = 0, error_amp = 0, error_phase = 0;
-
-    static float amplitude = 0;
-    static float wt = 0;
-    static float integral_fase = 0;
-    static float integral_amp = 0;
-
-    error_amp = *grid - (amplitude * cos(wt));
-    integral_amp += error_amp * cos(wt);
-    amplitude = integral_amp * K_AMP_PLL;
-
-    error_phase = error_amp * sin(wt);
-    integral_fase += error_phase;
-
-    w = KP_PI_PLL * error_phase + KI_PI_PLL * integral_fase + 2 * PI * FREQ;
-
-    wt += w * TS;
-
-    if(wt > 2 * PI)
-        wt = 0.0;
-
-    //return (amplitude * cos(wt));
-    return sin(wt - PI / 2);
-}
-
-static Uint16 VariableCheck(float* variable, int16 value)
-{
-    return (((*variable * (1 - RANGE)) < value) && ((*variable * (1 + RANGE)) > value));
-}
-
-static int16 PreChargeVoltage_Compensation(const int16* pre_load_ref, const int16* Vfilter)
-{
-    float preLoad_voltage_comp = 0.0, preLoad_voltage_error = 0.0;
-    static float integral_preLoad_voltage = 0.0;
-
-    preLoad_voltage_error = (*pre_load_ref) - (*Vfilter);
-    integral_preLoad_voltage += preLoad_voltage_error;
-
-    preLoad_voltage_comp = PRE_LOAD_KP * preLoad_voltage_error + PRE_LOAD_KI * integral_preLoad_voltage;
-    //preLoad_voltage_comp *= ((*pll) / V_PEAK);
-
-    return preLoad_voltage_comp;
-}
-
-static float PassiveFilterVoltage(const int16* pf_current)
-{
-    float inductor_voltage = 0.0;
-    float resistance_voltage = 0.0;
-    float derivate = 0.0;
-    static float inductor_current_prev = 0.0;
-
-    derivate = ((*pf_current) - inductor_current_prev) / TS;
-    inductor_voltage = LPF * derivate;
-    inductor_current_prev = (*pf_current);
-
-    resistance_voltage = RPF * (*pf_current);
-
-    return (inductor_voltage + resistance_voltage);
-}
-
-static float DC_LinkAverageVoltage(int16* DC_Voltage, const int16* dc_voltage)
-{
-    static unsigned int index = 0;
-    float average = 0.0;
-
-    if(!isBufferFull(&index)){
-        average = (float)getDC_LinkValues(DC_Voltage, dc_voltage, EMPTY_BUFFER) / (float)BUFFERSIZE;
-        index++;
-    }
-    else
-        average = (float)getDC_LinkValues(DC_Voltage, dc_voltage, FULL_BUFFER) / (float)BUFFERSIZE;
-
-    return average;
-}
-
-static unsigned int isBufferFull(unsigned int* index)
-{
-    return (*index++ == BUFFERSIZE - 1);
-}
-
-static Uint32 getDC_LinkValues(int16* DC_Voltage, const int16* dc_voltage, enum BufferType_t mode)
-{
-    static Uint32 sum = 0.0;
-
-    switch (mode)
-    {
-        case EMPTY_BUFFER:
-            sum += getFullDC_LinkValues(DC_Voltage, dc_voltage);
-        break;
-        case FULL_BUFFER:
-            sum = DC_LinkContiniousAverageVoltage(DC_Voltage, dc_voltage, &sum);
-        break;
-        default:
-        break;
-    }
-        return sum;
-}
-
-static Uint16 getFullDC_LinkValues(int16* DC_Voltage, const int16* dc_voltage)
-{
-    static unsigned int index = 0;
-
-    DC_Voltage[index++] = (*dc_voltage);
-
-    return *dc_voltage;
-}
-
-static Uint32 DC_LinkContiniousAverageVoltage(int16* DC_Voltage, const int16* dc_voltage, Uint32* sum)
-{
-    static unsigned int pos = 0;
-
-    *sum = (*sum) - (DC_Voltage[pos]) + (*dc_voltage);
-
-    DC_Voltage[pos++] = (*dc_voltage);
-
-    if(isBufferFull(&pos)){
-        pos = 0;
-    }
-
-    return (*sum);
-}
-
-static float DC_LinkCompensation(const float* dc_voltage, float* pll)
-{
-    float dc_voltage_comp = 0.0, dc_voltage_error = 0.0;
-    static float integral_dc_voltage = 0.0;
-
-    dc_voltage_error = V_REF - (*dc_voltage);
-    integral_dc_voltage += dc_voltage_error;
-
-    dc_voltage_comp = KP_PI_DC * dc_voltage_error + KI_PI_DC * integral_dc_voltage;
-    dc_voltage_comp *= (*pll / V_RMS);
-
-    return dc_voltage_comp;
-}
-
-static float CompensationVoltageCalc(const int16* grid, const float* pll, const float* pf, const float* reg)
-{
-    float Vharm = (*grid) - (*pll);
-
-    return (Vharm + (*pf) + (*reg));
-}
-
-static float VoltageCompensation(float* VcompRef, const int16* filter)
-{
-    //float LIM = (float)PWM_MAX / (V_COMP_KI * TS);
-    float LIM_MAX = KI_LIMIT(V_COMP_KI);
-    float LIM_MIN = -LIM_MAX;
-
-    float voltage_comp = 0.0, voltage_comp_error = 0.0;
-    //static float integral_comp_voltage = 0.0;
-
-    voltage_comp_error = (*VcompRef) - (*filter);
-    integral_comp_voltage += voltage_comp_error;
-
-    voltage_comp = V_COMP_KP * voltage_comp_error + V_COMP_KI * TS * integral_comp_voltage;
-
-    if (integral_comp_voltage > LIM_MAX) {
-        integral_comp_voltage = LIM_MAX;
-    }else if (integral_comp_voltage < LIM_MIN) {
-        integral_comp_voltage = LIM_MIN;
-    }
-
-    return voltage_comp;
-}
-
-static unsigned int SoftStart(const int16* dc_link_voltage)
-{
-    return *dc_link_voltage > V_REF;
-}
-
-static unsigned int MaxValue(const int16* vector)
-{
-    Uint16 max = vector[0];
-    Uint16 i = 0;
-
-    for (i = 0; i < (BUFFERSIZE >> 0x01); i++){
-        if (vector[i] > max){
-            max = vector[i];
-        }
-    }
-
-    return max;
-}
-
-static unsigned getVpeak(const int16* signal)
-{
-    static Uint16 pos = 0;
-
-    GridVoltage[pos] = abs(*signal);
-
-    if (pos == 400) {
-        pos = 0;
-        return MaxValue(signal);
-    }
-
-    return 0;
-}
-
-static float DC_LinkRegulation(Uint16 disturbance, const float* average)
-{
-    float vdc = ADC_Data.Vdc;
-
-    if (!disturbance){
-            if (VariableCheck(&vdc, V_REF)){
-                return DC_LinkCompensation(average, &Vpll);
-            }
-            else if (ADC_Data.Vdc < V_REF){
-                return (Vpll / V_RMS) * 5;
-            }
-            else {
-                return (-(Vpll / V_RMS) * 10);
-            }
-    }
-    return 0.0;
-}
-
