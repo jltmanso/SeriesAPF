@@ -19,9 +19,10 @@ Uint16 new_data = 0;                                    //flag to sinalize the n
 float integral_comp_voltage = 0.0;                      //needed to be cleared when the enable button is disable
 float integral_preLoad_voltage = 0.0;                   //needed to be cleared when the enable button is disable
 float integral_dc_voltage = 0.0;                        //needed to be cleared when the enable button is disable
-float KP_COMP = V_COMP_KP;
-float KI_COMP = V_COMP_KI;
-
+//float KP = PRE_CHARGE_KP;
+//float KI = PRE_CHARGE_KI;
+float KP = V_COMP_KP;
+float KI = V_COMP_KI;
 //###############################################
 //#             User Functions                  #
 //###############################################
@@ -67,9 +68,9 @@ void SAPFControl(void)
     }
 //STEADY-STATE
     if(!pre_charge_flag && synced && isSAPF_Enabled()){
-        VpreCharge = PreChargeRefCalculation(&ADC_Data.Vdc, &Vpll_unitary);
+        //VpreCharge = PreChargeRefCalculation(&ADC_Data.Vdc, &Vpll_unitary);
         //Vreg = DC_LinkRegulation(&Avg_DC, &Vpll_unitary);
-        Vpf = PassiveFilterVoltage(&ADC_Data.Ilf);
+        //Vpf = PassiveFilterVoltage(&ADC_Data.Ilf);
         Vref = CompensationVoltageCalc(&ADC_Data.Vgrid, &Vpll, &Vpll_unitary, &Vpf, &Vreg, &VpreCharge);
         Vcomp = VoltageCompensation(&Vref, &ADC_Data.Vf);
         Vpwm = setPWM(Vcomp);
@@ -99,8 +100,6 @@ void ADC1_SaveData(void)
 {
     unsigned long entrada_A = 0;
     unsigned long entrada_B = 0;
-
-    static int i = 0;
 
     asm("      NOP");   asm("      NOP");   asm("      NOP");   asm("      NOP");   asm("      NOP");
     asm("      NOP");   asm("      NOP");   asm("      NOP");   asm("      NOP");   asm("      NOP");
@@ -264,8 +263,12 @@ int16 setPWM(float Vcompensation)
     int16 Vpwm = (int16)Vcompensation;
     int16 PWM = assert_PWM(Vpwm);
 
-    EPwm1Regs.CMPA.half.CMPA = PWM + PWM_OFFSET;   //S1 and S2
+    //Unipolar
+    //EPwm1Regs.CMPA.half.CMPA = -PWM + PWM_OFFSET;   //S1 and S2
     //EPwm2Regs.CMPA.half.CMPA = PWM + PWM_OFFSET;    //S3 and S4
+
+    //Bipolar
+    EPwm1Regs.CMPA.half.CMPA = PWM + PWM_OFFSET;   //S1 and S2
     EPwm2Regs.CMPA.half.CMPA = PWM + PWM_OFFSET;    //S3 and S4
 
     return PWM;
@@ -393,7 +396,8 @@ static float PreChargeVoltage_Compensation(const float* pre_load_ref, const int1
         integral_preLoad_voltage = KI_PRE_CHARGE_MIN;
     }
 
-    preLoad_voltage_comp = PRE_CHARGE_KP * preLoad_voltage_error + PRE_CHARGE_KI * integral_preLoad_voltage;
+    preLoad_voltage_comp = KP * preLoad_voltage_error + KI * integral_preLoad_voltage;
+    //preLoad_voltage_comp = PRE_CHARGE_KP * preLoad_voltage_error + PRE_CHARGE_KI *integral_preLoad_voltage;
 
     return preLoad_voltage_comp;
 }
@@ -563,15 +567,12 @@ static float DC_LinkRegulation(const float* dc_voltage, const float* pll)
 
 static float CompensationVoltageCalc(const int16* grid, const float* pll, const float* pll_unitary, const float* pf, const float* reg, const float * pre_charge)
 {
-//    float true_sinewave = V_PEAK * (*pll_unitary);
-//    float balance = true_sinewave - (*pll);
+    float true_sinewave = V_PEAK * (*pll_unitary);
+    float balance = true_sinewave - (*pll);
 
-    //float Vharm = (*pll) - (float)(*grid);
+    float Vharm = (*pll) - (float)(*grid);
 
-    float Vref = (PRE_CHARGE_REF * Vpll_unitary);
-
-
-    return Vref;
+    return Vharm;
     //return (Vharm + (*reg) + balance + (*pre_charge));
     //return (Vharm + (*pf) + (*reg) + balance + (*pre_charge));
 }
@@ -594,9 +595,9 @@ static float VoltageCompensation(float* VcompRef, const int16* filter)
         integral_comp_voltage = KI_VCOMP_LIM_MIN;
     }
 
-    voltage_comp = KP_COMP * voltage_comp_error + KI_COMP * integral_comp_voltage;
-    //voltage_comp = KP * voltage_comp_error + KI * TS * integral_comp_voltage;
-    //voltage_comp = V_COMP_KP * voltage_comp_error + V_COMP_KI * TS * integral_comp_voltage;
+    //voltage_comp = KP_COMP * voltage_comp_error + KI_COMP * integral_comp_voltage;
+    voltage_comp = KP * voltage_comp_error + KI * /*TS **/ integral_comp_voltage;
+    //voltage_comp = V_COMP_KP * voltage_comp_error + V_COMP_KI * integral_comp_voltage;
 
     return voltage_comp;
 }

@@ -42,7 +42,7 @@
 //###############################################
 //#         DC Link Regulation Defines          #
 //###############################################
-#define         V_REF               400.0f//750.0f               //DC Link Voltage Reference (30V)
+#define         V_REF               600.0f                       //DC Link Voltage Reference (30V)
 #define         KP_PI_DC            16.8f                        //DC Link Proporcional Gain
 #define         KI_PI_DC            40.0f                        //DC Link Integral Gain
 //###############################################
@@ -55,14 +55,14 @@
 //#       Pre-Charge Compensation Defines       #
 //###############################################
 #define         PRE_CHARGE_REF      213.0f                      //5V sinusoidal wave
-#define         PRE_CHARGE_KP       1.0f
-#define         PRE_CHARGE_KI       0.0f
+#define         PRE_CHARGE_KP       2.5f
+#define         PRE_CHARGE_KI       0.1f
 
 //###############################################
 //#       Voltage Compensation Defines          #
 //###############################################
-#define         V_COMP_KP           1.95f//1.2f
-#define         V_COMP_KI           0.08f//200.0f//500000.0f
+#define         V_COMP_KP           4.2f
+#define         V_COMP_KI           0.05f
 
 //###############################################
 //#            DAC Offsets Defines              #
@@ -96,7 +96,7 @@
 #define         RESERV_OFFSET       0
 #define         ILOAD_OFFSET        71
 #define         VDC_OFFSET          77
-#define         VF_OFFSET           47//82//47
+#define         VF_OFFSET           77//47//83
 #define         ILF_OFFSET          -1
 #define         RESERV1_OFFSET      0
 #define         ENABLE_OFFSET       -5

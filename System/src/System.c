@@ -21,6 +21,9 @@ __interrupt void CpuTimer0Interrupt_isr(void)
 __interrupt void ExternalInterrupt3_isr(void)
 {
     xInt3_flag = 1;
+
+    GpioDataRegs.GPATOGGLE.bit.GPIO10 = 1;
+
     //Acknowledge this interrupt to get more from group 12
     PieCtrlRegs.PIEACK.all = PIEACK_GROUP12;
 }
@@ -236,10 +239,10 @@ static void ConfigScia(Uint16 baudrate)
 static void ConfigPWM_1(void)
 {
     //######################################  PWM 1 ######################################
-    //TBPRD = fDSP/(2xfPWMxCLKDIVxHSPCLKDIV)
+    //TBPRD = fDSP/(fPWMxCLKDIVxHSPCLKDIV)
     EPwm1Regs.TBPRD                 = PRD_VALUE;
     EPwm1Regs.TBPHS.half.TBPHS      = 0;                // Set Phase register to zero
-    EPwm1Regs.TBCTR                 = 0;                //Clear Counter
+    EPwm1Regs.TBCTR                 = 0;                // Clear Counter
 
     // Setup Counter Mode
     EPwm1Regs.TBCTL.bit.CTRMODE     = TB_COUNT_UPDOWN;  // Symmetrical mode
